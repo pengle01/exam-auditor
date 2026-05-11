@@ -91,8 +91,16 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
           </div>
         )}
         {res.exceededPoints && (
-          <div className="flex items-center gap-2 text-red-600 text-xs font-semibold">
-            <XCircle size={14} /> POINTS EXCEED MAX
+          <div className="text-red-600 text-xs font-semibold space-y-1">
+            {res.exceededQuestions.map(q => {
+              const max = res.maxPoints.find(m => m.question === q.question);
+              return (
+                <div key={q.question} className="flex items-center gap-2">
+                  <XCircle size={14} className="shrink-0" />
+                  Q{q.question}: awarded {q.points} &gt; max {max?.points ?? '?'}
+                </div>
+              );
+            })}
           </div>
         )}
         {res.conversionAbsent && (
@@ -127,6 +135,7 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
 
 export default function ExamAuditor() {
   const [templateImage, setTemplateImage] = useState<string | null>(null);
+  const [maxPoints, setMaxPoints] = useState<{ question: string; points: number }[] | null>(null);
   const [templateProcessing, setTemplateProcessing] = useState(false);
   const [results, setResults] = useState<AuditResult[]>([]);
   const [pendingAudits, setPendingAudits] = useState<PendingAudit[]>([]);
@@ -199,10 +208,24 @@ export default function ExamAuditor() {
         try {
           const base64String = reader.result as string;
           const compressed = await compressImage(base64String);
+
+          const response = await fetch('/api/audit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateImage: compressed }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Template extraction failed');
+          }
+
+          const data = await response.json();
+          setMaxPoints(data.maxPoints);
           setTemplateImage(compressed);
           setPhase('audit');
         } catch (err) {
-          alert('Error processing template.');
+          alert('Error processing template: ' + (err instanceof Error ? err.message : 'Unknown error'));
         } finally {
           setTemplateProcessing(false);
         }
@@ -230,13 +253,13 @@ export default function ExamAuditor() {
   };
 
   const performAudit = async (testImage: string, auditId: string) => {
-    if (!templateImage) return;
+    if (!maxPoints) return;
 
     try {
       const response = await fetch('/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateImage, testImage }),
+        body: JSON.stringify({ testImage, maxPoints }),
       });
 
       if (!response.ok) {
@@ -256,6 +279,7 @@ export default function ExamAuditor() {
 
   const resetTemplate = () => {
     setTemplateImage(null);
+    setMaxPoints(null);
     setPhase('setup');
     setResults([]);
     setPendingAudits([]);
