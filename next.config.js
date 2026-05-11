@@ -6,7 +6,16 @@ const nextConfig = {
     },
   },
   // Allow remote access from the phone for development
-  allowedDevOrigins: ['192.168.10.8'],
+  allowedDevOrigins: [
+    'http://192.168.10.8:3000',
+    'http://192.168.10.58:3000',
+    'http://192.168.10.59:3000',
+    'http://192.168.10.59',
+    'https://192.168.10.59',
+    'https://192.168.10.59:3000',
+    'http://192.168.17.32:3000',
+    'http://192.168.17.32',
+  ],
 };
 
 module.exports = nextConfig;

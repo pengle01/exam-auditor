@@ -4,16 +4,22 @@ import { useState, useRef, useEffect } from 'react';
 import { Camera, CheckCircle, XCircle, Loader2, Upload, AlertTriangle, ChevronDown, ChevronUp, Code } from 'lucide-react';
 
 interface AuditResult {
+  id?: string;
   maxPoints: { question: string; points: number }[];
   awardedPoints: { question: string; points: number }[];
   markerId: string;
   signaturePresent: boolean;
-  writtenTotal: number;
+  writtenTotal: number | null;
+  writtenGrade20: number | null;
   calculatedSum: number;
+  markerIdMissing: boolean;
+  writtenTotalAbsent: boolean;
   additionError: boolean;
   exceededPoints: boolean;
   exceededQuestions: { question: string; points: number }[];
   gradeConversion: number;
+  conversionAbsent: boolean;
+  conversionError: boolean;
   passed: boolean;
 }
 
@@ -30,7 +36,9 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
     <div className={`bg-white rounded-2xl shadow-sm border-l-8 p-5 ${res.passed ? 'border-l-green-500' : 'border-l-red-500'} transition-all animate-in fade-in slide-in-from-bottom-2`}>
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h4 className="font-bold text-lg text-slate-800">Marker: {res.markerId}</h4>
+          <h4 className="font-bold text-lg text-slate-800">
+            {res.markerIdMissing ? <span className="text-red-500 italic">Marker ID missing</span> : `Marker: ${res.markerId}`}
+          </h4>
           <p className="text-sm text-slate-500">Grade: {res.gradeConversion.toFixed(2)}/20</p>
         </div>
         <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${res.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -38,23 +46,43 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+      <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div className="bg-slate-50 p-3 rounded-lg">
-          <p className="text-slate-400 text-xs">Written Total</p>
-          <p className={`text-xl font-bold ${res.additionError ? 'text-red-600 underline decoration-wavy' : 'text-slate-700'}`}>
-            {res.writtenTotal}
+          <p className="text-slate-400 text-xs">Written /100</p>
+          <p className={`text-xl font-bold ${res.writtenTotalAbsent ? 'text-amber-500' : res.additionError ? 'text-red-600 underline decoration-wavy' : 'text-slate-700'}`}>
+            {res.writtenTotalAbsent ? '—' : res.writtenTotal}
           </p>
         </div>
         <div className="bg-slate-50 p-3 rounded-lg">
-          <p className="text-slate-400 text-xs">Native Sum</p>
+          <p className="text-slate-400 text-xs">Calculated Sum</p>
           <p className="text-xl font-bold text-slate-700">{res.calculatedSum}</p>
+        </div>
+        <div className="bg-slate-50 p-3 rounded-lg">
+          <p className="text-slate-400 text-xs">Written /20</p>
+          <p className={`text-xl font-bold ${res.conversionAbsent ? 'text-amber-500' : res.conversionError ? 'text-red-600 underline decoration-wavy' : 'text-slate-700'}`}>
+            {res.conversionAbsent ? '—' : res.writtenGrade20}
+          </p>
+        </div>
+        <div className="bg-slate-50 p-3 rounded-lg">
+          <p className="text-slate-400 text-xs">Expected /20</p>
+          <p className="text-xl font-bold text-slate-700">{res.gradeConversion.toFixed(2)}</p>
         </div>
       </div>
 
       <div className="space-y-2 mb-4">
+        {res.markerIdMissing && (
+          <div className="flex items-center gap-2 text-red-600 text-xs font-semibold">
+            <XCircle size={14} /> MISSING MARKER ID
+          </div>
+        )}
         {!res.signaturePresent && (
           <div className="flex items-center gap-2 text-red-600 text-xs font-semibold">
             <XCircle size={14} /> MISSING SIGNATURE
+          </div>
+        )}
+        {res.writtenTotalAbsent && (
+          <div className="flex items-center gap-2 text-amber-600 text-xs font-semibold">
+            <AlertTriangle size={14} /> TOTAL /100 ABSENT
           </div>
         )}
         {res.additionError && (
@@ -65,6 +93,16 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
         {res.exceededPoints && (
           <div className="flex items-center gap-2 text-red-600 text-xs font-semibold">
             <XCircle size={14} /> POINTS EXCEED MAX
+          </div>
+        )}
+        {res.conversionAbsent && (
+          <div className="flex items-center gap-2 text-amber-600 text-xs font-semibold">
+            <AlertTriangle size={14} /> GRADE /20 ABSENT
+          </div>
+        )}
+        {res.conversionError && (
+          <div className="flex items-center gap-2 text-red-600 text-xs font-semibold">
+            <XCircle size={14} /> CONVERSION ERROR
           </div>
         )}
       </div>
@@ -93,7 +131,7 @@ export default function ExamAuditor() {
   const [results, setResults] = useState<AuditResult[]>([]);
   const [pendingAudits, setPendingAudits] = useState<PendingAudit[]>([]);
   const [phase, setPhase] = useState<'setup' | 'audit'>('setup');
-  
+
   const templateInputRef = useRef<HTMLInputElement>(null);
   const testInputRef = useRef<HTMLInputElement>(null);
 
@@ -119,7 +157,7 @@ export default function ExamAuditor() {
   };
 
   const compressImage = (base64Str: string): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const img = new Image();
       img.src = base64Str;
       img.onload = () => {
@@ -146,6 +184,7 @@ export default function ExamAuditor() {
         ctx?.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
+      img.onerror = () => reject(new Error('Failed to load image for compression'));
     });
   };
 
@@ -171,7 +210,7 @@ export default function ExamAuditor() {
       reader.readAsDataURL(files[0]);
     } else {
       files.forEach(file => {
-        const auditId = Math.random().toString(36).substring(7);
+        const auditId = crypto.randomUUID();
         setPendingAudits(prev => [{ id: auditId, status: 'processing' }, ...prev]);
 
         const reader = new FileReader();
@@ -206,11 +245,12 @@ export default function ExamAuditor() {
       }
 
       const data: AuditResult = await response.json();
-      setResults((prev) => [data, ...prev]);
+      setResults((prev) => [{ ...data, id: auditId }, ...prev]);
       setPendingAudits(prev => prev.filter(p => p.id !== auditId));
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       console.error('Audit error:', error);
-      setPendingAudits(prev => prev.map(p => p.id === auditId ? { ...p, status: 'error', error: error.message } : p));
+      setPendingAudits(prev => prev.map(p => p.id === auditId ? { ...p, status: 'error', error: message } : p));
     }
   };
 
@@ -238,7 +278,7 @@ export default function ExamAuditor() {
                 <p>Camera capture requires <b>HTTPS</b> or <b>localhost</b>. Use a tunnel (e.g., ngrok) to enable camera access on your mobile device.</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={testConnection}
               className="w-full py-2 text-xs font-bold rounded-lg border border-amber-300 bg-white text-amber-700 active:bg-amber-100 flex items-center justify-center gap-2"
             >
@@ -323,21 +363,29 @@ export default function ExamAuditor() {
                 Recent Audits
                 <span className="text-xs font-normal text-slate-400">{results.length} total</span>
               </h3>
-              
+
               {pendingAudits.length > 0 && (
                 <div className="space-y-3">
                   {pendingAudits.map(pending => (
-                    <div key={pending.id} className="bg-white rounded-xl border border-blue-100 p-4 flex items-center justify-between animate-pulse">
+                    <div
+                      key={pending.id}
+                      className={`bg-white rounded-xl border p-4 flex items-center justify-between ${
+                        pending.status === 'processing' ? 'border-blue-100 animate-pulse' : 'border-red-100'
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
-                        <Loader2 className="animate-spin text-blue-500" size={20} />
+                        {pending.status === 'processing'
+                          ? <Loader2 className="animate-spin text-blue-500" size={20} />
+                          : <XCircle className="text-red-500 shrink-0" size={20} />
+                        }
                         <span className="text-sm font-medium text-slate-600">
-                          {pending.status === 'processing' ? 'Auditing student paper...' : 'Error processing'}
+                          {pending.status === 'processing' ? 'Auditing student paper...' : (pending.error ?? 'Error processing')}
                         </span>
                       </div>
                       {pending.status === 'error' && (
-                        <button 
+                        <button
                           onClick={() => setPendingAudits(prev => prev.filter(p => p.id !== pending.id))}
-                          className="text-xs text-red-500 font-bold uppercase"
+                          className="text-xs text-red-500 font-bold uppercase shrink-0 ml-2"
                         >
                           Dismiss
                         </button>
@@ -346,17 +394,16 @@ export default function ExamAuditor() {
                   ))}
                 </div>
               )}
-              
+
               {results.length === 0 && pendingAudits.length === 0 && (
                 <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl">
                   <p className="text-slate-400">No audits yet. Capture a test to begin!</p>
                 </div>
               )}
 
-
               <div className="space-y-4">
-                {results.map((res, i) => (
-                  <AuditCard key={i} res={res} />
+                {results.map((res) => (
+                  <AuditCard key={res.id} res={res} />
                 ))}
               </div>
             </div>
