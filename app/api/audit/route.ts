@@ -16,8 +16,9 @@ const templateSchema = {
         additionalProperties: false,
       },
     },
+    totalPoints: { type: "number" },
   },
-  required: ["maxPoints"],
+  required: ["maxPoints", "totalPoints"],
   additionalProperties: false,
 };
 
@@ -81,6 +82,8 @@ export async function POST(req: NextRequest) {
 Extract the maximum points per question from this template / reference key (Υπόδειγμα).
 Look for the maximum points (Μέγιστη Βαθμολογία) allocated to each question (e.g., "Ερ1: 10", "Θέμα 1 [10]").
 Map each question label and its maximum point value to the 'maxPoints' array.
+Also find the total possible score for the exam (the sum of all question maximums, e.g. 100 or 50) and return it as 'totalPoints'.
+If not explicitly stated, compute it as the sum of all maxPoints values.
 Use numbers only for point values.`;
 
       console.log("Extracting template maxPoints...");
@@ -111,10 +114,10 @@ Use numbers only for point values.`;
     }
 
     // ── Audit mode ────────────────────────────────────────────────────────────
-    const { testImage, maxPoints } = body;
+    const { testImage, maxPoints, totalPoints } = body;
 
-    if (!testImage || !maxPoints) {
-      return NextResponse.json({ error: 'Missing testImage or maxPoints' }, { status: 400 });
+    if (!testImage || !maxPoints || totalPoints == null) {
+      return NextResponse.json({ error: 'Missing testImage, maxPoints, or totalPoints' }, { status: 400 });
     }
 
     if (testImage.length > MAX_IMAGE_BASE64_LENGTH) {
@@ -194,13 +197,14 @@ DATA RULES:
       return max ? q.points > (max as QuestionScore).points : false;
     });
 
-    const gradeConversion = (awardedSum / 100) * 20;
+    const gradeConversion = (awardedSum / totalPoints) * 20;
     const conversionError = !conversionAbsent && !writtenTotalAbsent &&
       Math.abs((response.writtenGrade20 as number) - gradeConversion) > 1.0;
 
     const auditResult = {
       ...response,
       maxPoints,
+      totalPoints,
       calculatedSum: awardedSum,
       markerIdMissing,
       writtenTotalAbsent,
