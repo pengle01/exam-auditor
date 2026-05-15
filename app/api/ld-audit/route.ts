@@ -37,7 +37,7 @@ const ldSchema = {
   additionalProperties: false,
 };
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' });
+const client = new Anthropic();
 const MAX_IMAGE_BASE64_LENGTH = 5 * 1024 * 1024;
 
 export const maxDuration = 60;
@@ -130,6 +130,7 @@ DATA RULES:
       }],
     });
 
+    if (message.stop_reason === 'max_tokens') throw new Error("Model response truncated");
     if (message.stop_reason === 'refusal') {
       return NextResponse.json({ error: 'Model refused to process the request' }, { status: 422 });
     }
@@ -190,6 +191,12 @@ DATA RULES:
     return NextResponse.json(ldResult);
   } catch (error) {
     console.error('LD Audit Error:', error);
+    if (error instanceof Anthropic.RateLimitError) {
+      return NextResponse.json({ error: 'Rate limited — please try again shortly' }, { status: 429 });
+    }
+    if (error instanceof Anthropic.APIError) {
+      return NextResponse.json({ error: 'API error', details: error.message }, { status: 502 });
+    }
     return NextResponse.json(
       {
         error: 'Failed to process LD audit',

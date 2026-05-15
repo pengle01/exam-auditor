@@ -46,7 +46,7 @@ const testSchema = {
   additionalProperties: false,
 };
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' });
+const client = new Anthropic();
 
 const MAX_IMAGE_BASE64_LENGTH = 5 * 1024 * 1024;
 
@@ -90,7 +90,7 @@ Use numbers only for point values.`;
 
       const message = await client.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 1024,
+        max_tokens: 2048,
         output_config: {
           format: { type: "json_schema", schema: templateSchema },
         },
@@ -105,6 +105,9 @@ Use numbers only for point values.`;
           ],
         }],
       });
+
+      if (message.stop_reason === "max_tokens") throw new Error("Model response truncated — too many questions");
+      if (message.stop_reason === "refusal") return NextResponse.json({ error: 'Model refused to process the template' }, { status: 422 });
 
       const textBlock = message.content.find(b => b.type === "text");
       if (!textBlock || textBlock.type !== "text") throw new Error("No text content in model response");
@@ -170,6 +173,7 @@ DATA RULES:
       }],
     });
 
+    if (message.stop_reason === "max_tokens") throw new Error("Model response truncated");
     if (message.stop_reason === "refusal") {
       return NextResponse.json({ error: 'Model refused to process the request' }, { status: 422 });
     }
@@ -222,6 +226,12 @@ DATA RULES:
     return NextResponse.json(auditResult);
   } catch (error) {
     console.error('Audit Error:', error);
+    if (error instanceof Anthropic.RateLimitError) {
+      return NextResponse.json({ error: 'Rate limited — please try again shortly' }, { status: 429 });
+    }
+    if (error instanceof Anthropic.APIError) {
+      return NextResponse.json({ error: 'API error', details: error.message }, { status: 502 });
+    }
     return NextResponse.json({
       error: 'Failed to process audit',
       details: error instanceof Error ? error.message : 'Unknown error',
