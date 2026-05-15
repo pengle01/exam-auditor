@@ -5,6 +5,7 @@ import { Camera, CheckCircle, XCircle, Loader2, Upload, AlertTriangle, ChevronDo
 
 interface AuditResult {
   id?: string;
+  image?: string;
   maxPoints: { question: string; points: number }[];
   totalPoints: number;
   awardedPoints: { question: string; points: number }[];
@@ -32,6 +33,7 @@ interface PendingAudit {
 
 interface LDAuditResult {
   id?: string;
+  image?: string;
   maxPoints: { question: string; points: number }[];
   totalPoints: number;
   awardedPoints: { question: string; points: number }[];
@@ -64,6 +66,7 @@ const fmt20 = (n: number) => {
 
 const AuditCard = ({ res }: { res: AuditResult }) => {
   const [showJson, setShowJson] = useState(false);
+  const [showImage, setShowImage] = useState(false);
 
   return (
     <div className={`bg-white rounded-2xl shadow-sm border-l-8 p-5 ${res.passed ? 'border-l-green-500' : 'border-l-red-500'} transition-all animate-in fade-in slide-in-from-bottom-2`}>
@@ -74,10 +77,21 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
           </h4>
           <p className="text-sm text-slate-500">Grade: {fmt20(res.gradeConversion)}/20</p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${res.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {res.passed ? 'Pass' : 'Fail'}
+        <div className="flex items-start gap-2">
+          {res.image && (
+            <button onClick={() => setShowImage(v => !v)} className="shrink-0">
+              <img src={res.image} alt="Paper" className="w-9 h-12 object-cover rounded-lg border border-slate-200 shadow-sm" />
+            </button>
+          )}
+          <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${res.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {res.passed ? 'Pass' : 'Fail'}
+          </div>
         </div>
       </div>
+
+      {showImage && res.image && (
+        <img src={res.image} alt="Exam paper" className="w-full rounded-xl border border-slate-200 mb-4" />
+      )}
 
       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div className="bg-slate-50 p-3 rounded-lg">
@@ -168,6 +182,7 @@ const AuditCard = ({ res }: { res: AuditResult }) => {
 
 const LDAuditCard = ({ res }: { res: LDAuditResult }) => {
   const [showJson, setShowJson] = useState(false);
+  const [showImage, setShowImage] = useState(false);
 
   return (
     <div className={`bg-white rounded-2xl shadow-sm border-l-8 p-5 ${res.passed ? 'border-l-green-500' : 'border-l-red-500'} transition-all animate-in fade-in slide-in-from-bottom-2`}>
@@ -178,10 +193,21 @@ const LDAuditCard = ({ res }: { res: LDAuditResult }) => {
           </h4>
           <p className="text-sm text-slate-500">LD Grade: {fmt20(res.ldGrade20)}/20</p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${res.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {res.passed ? 'Pass' : 'Fail'}
+        <div className="flex items-start gap-2">
+          {res.image && (
+            <button onClick={() => setShowImage(v => !v)} className="shrink-0">
+              <img src={res.image} alt="Paper" className="w-9 h-12 object-cover rounded-lg border border-slate-200 shadow-sm" />
+            </button>
+          )}
+          <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${res.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {res.passed ? 'Pass' : 'Fail'}
+          </div>
         </div>
       </div>
+
+      {showImage && res.image && (
+        <img src={res.image} alt="Exam paper" className="w-full rounded-xl border border-slate-200 mb-4" />
+      )}
 
       <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
         <div className="bg-slate-50 p-3 rounded-lg">
@@ -415,7 +441,7 @@ export default function ExamAuditor() {
       }
 
       const data: AuditResult = await response.json();
-      setResults((prev) => [{ ...data, id: auditId }, ...prev]);
+      setResults((prev) => [{ ...data, id: auditId, image: testImage }, ...prev]);
       setPendingAudits(prev => prev.filter(p => p.id !== auditId));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -440,7 +466,7 @@ export default function ExamAuditor() {
       }
 
       const data: LDAuditResult = await response.json();
-      setLdResults(prev => [{ ...data, id: auditId }, ...prev]);
+      setLdResults(prev => [{ ...data, id: auditId, image: testImage }, ...prev]);
       setLdPendingAudits(prev => prev.filter(p => p.id !== auditId));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
